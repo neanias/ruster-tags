@@ -1,6 +1,11 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
-use std::{fmt::Debug, fs, path::Path, vec};
+use std::{
+    fmt::{Debug, Display},
+    fs,
+    path::Path,
+    vec,
+};
 
 // use walkdir::WalkDir;
 use lib_ruby_parser::{
@@ -21,7 +26,19 @@ enum Kind {
     Constant,
     SingletonMethod,
     Alias,
-    // Accessor,
+}
+
+impl Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Class => write!(f, "c"),
+            Self::Module => write!(f, "m"),
+            Self::Method => write!(f, "f"),
+            Self::Constant => write!(f, "C"),
+            Self::SingletonMethod => write!(f, "F"),
+            Self::Alias => write!(f, "a"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -30,6 +47,16 @@ struct Definition {
     file: String,
     source: String,
     kind: Kind,
+}
+
+impl Display for Definition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\t{}\t/{}$/;\"\t{}",
+            self.name, self.file, self.source, self.kind
+        )
+    }
 }
 
 struct TagsCollector {
@@ -42,6 +69,20 @@ impl Debug for TagsCollector {
         f.debug_struct("Tags")
             .field("definitions", &self.definitions)
             .finish()
+    }
+}
+
+impl Display for TagsCollector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.definitions
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<String>>()
+                .join("\n")
+        )
     }
 }
 
@@ -195,8 +236,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut collector = TagsCollector::new(input);
     collector.visit(&ast);
+    collector
+        .definitions
+        .sort_by(|lhs, rhs| lhs.name.cmp(&rhs.name));
 
-    println!("{:#?}", collector);
+    println!("{:#?}\n", collector);
+    println!("{}\n", collector);
 
     Ok(())
 }
