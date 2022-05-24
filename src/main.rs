@@ -34,26 +34,25 @@ struct Definition {
 
 struct TagsCollector {
     input: DecodedInput,
-    aliases: Vec<Definition>,
-    classes: Vec<Definition>,
-    constants: Vec<Definition>,
-    methods: Vec<Definition>,
-    modules: Vec<Definition>,
+    definitions: Vec<Definition>,
 }
 
 impl Debug for TagsCollector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Tags")
-            .field("aliases", &self.aliases)
-            .field("classes", &self.classes)
-            .field("constants", &self.constants)
-            .field("methods", &self.methods)
-            .field("modules", &self.modules)
+            .field("definitions", &self.definitions)
             .finish()
     }
 }
 
 impl TagsCollector {
+    const fn new(input: DecodedInput) -> Self {
+        Self {
+            input,
+            definitions: vec![],
+        }
+    }
+
     fn fetch_const_name(name: &Node) -> String {
         match name {
             Node::Const(Const { name, .. }) => name.clone(),
@@ -65,7 +64,7 @@ impl TagsCollector {
 
 impl Visitor for TagsCollector {
     fn on_alias(&mut self, node: &Alias) {
-        self.aliases.push(Definition {
+        self.definitions.push(Definition {
             name: Self::fetch_const_name(&node.to),
             file: self.input.name.clone(),
             source: {
@@ -79,7 +78,7 @@ impl Visitor for TagsCollector {
     }
 
     fn on_casgn(&mut self, node: &Casgn) {
-        self.constants.push(Definition {
+        self.definitions.push(Definition {
             name: node.name.clone(),
             file: self.input.name.clone(),
             source: {
@@ -93,7 +92,7 @@ impl Visitor for TagsCollector {
     }
 
     fn on_class(&mut self, node: &Class) {
-        self.classes.push(Definition {
+        self.definitions.push(Definition {
             name: Self::fetch_const_name(&node.name),
             file: self.input.name.clone(),
             source: {
@@ -107,7 +106,7 @@ impl Visitor for TagsCollector {
     }
 
     fn on_def(&mut self, node: &Def) {
-        self.methods.push(Definition {
+        self.definitions.push(Definition {
             name: node.name.clone(),
             file: self.input.name.clone(),
             source: {
@@ -121,7 +120,7 @@ impl Visitor for TagsCollector {
     }
 
     fn on_defs(&mut self, node: &Defs) {
-        self.methods.push(Definition {
+        self.definitions.push(Definition {
             name: node.name.clone(),
             file: self.input.name.clone(),
             source: {
@@ -135,7 +134,7 @@ impl Visitor for TagsCollector {
     }
 
     fn on_module(&mut self, node: &Module) {
-        self.modules.push(Definition {
+        self.definitions.push(Definition {
             name: Self::fetch_const_name(&node.name),
             file: self.input.name.clone(),
             source: {
@@ -150,7 +149,7 @@ impl Visitor for TagsCollector {
 
     fn on_send(&mut self, node: &Send) {
         if node.method_name.starts_with("attr_") {
-            self.methods.extend(node.args.iter().filter_map(|arg| {
+            self.definitions.extend(node.args.iter().filter_map(|arg| {
                 if let Node::Sym(Sym { name, .. }) = arg {
                     Some(Definition {
                         name: name.to_string_lossy(),
@@ -165,7 +164,7 @@ impl Visitor for TagsCollector {
                 } else {
                     None
                 }
-            }))
+            }));
         }
         visit_send(self, node);
     }
@@ -194,14 +193,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ParserResult { ast, input, .. } = parser.do_parse();
     let ast = ast.unwrap();
 
-    let mut collector = TagsCollector {
-        input,
-        aliases: vec![],
-        classes: vec![],
-        constants: vec![],
-        methods: vec![],
-        modules: vec![],
-    };
+    let mut collector = TagsCollector::new(input);
     collector.visit(&ast);
 
     println!("{:#?}", collector);
